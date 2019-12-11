@@ -12,11 +12,15 @@ namespace CustomVision
     {
         readonly List<string> labels;
         readonly TensorFlowInferenceInterface inferenceInterface;
+        static int _inputSize;
+        static readonly string InputName = "Placeholder";
+        static readonly string OutputName = "loss";
 
         public ImageClassifier()
         {
             var assets = Application.Context.Assets;
 			inferenceInterface = new TensorFlowInferenceInterface(assets, "model.pb");
+            _inputSize = (int)inferenceInterface.GraphOperation(InputName).Output(0).Shape().Size(1);
 
             using (var sr = new StreamReader(assets.Open("labels.txt")))
             {
@@ -24,11 +28,7 @@ namespace CustomVision
                 labels = content.Split('\n').Select(s => s.Trim()).Where(s => !string.IsNullOrEmpty(s)).ToList();
             }
 
-        }
-
-        static readonly int InputSize = 227;
-        static readonly string InputName = "Placeholder";
-        static readonly string OutputName = "loss";
+        } 
 
         public string RecognizeImage(Bitmap bitmap)
         {
@@ -36,7 +36,7 @@ namespace CustomVision
             var floatValues = GetBitmapPixels(bitmap);
             var outputs = new float[labels.Count];
 
-            inferenceInterface.Feed(InputName, floatValues, 1, InputSize, InputSize, 3);
+            inferenceInterface.Feed(InputName, floatValues, 1, _inputSize, _inputSize, 3);
             inferenceInterface.Run(outputNames);
             inferenceInterface.Fetch(OutputName, outputs);
 
@@ -49,13 +49,13 @@ namespace CustomVision
 
         static float[] GetBitmapPixels(Bitmap bitmap)
         {
-            var floatValues = new float[227 * 227 * 3];
+            var floatValues = new float[_inputSize * _inputSize * 3];
 
-            using (var scaledBitmap = Bitmap.CreateScaledBitmap(bitmap, 227, 227, false))
+            using (var scaledBitmap = Bitmap.CreateScaledBitmap(bitmap, _inputSize, _inputSize, false))
             {
                 using (var resizedBitmap = scaledBitmap.Copy(Bitmap.Config.Argb8888, false))
                 {
-                    var intValues = new int[227 * 227];
+                    var intValues = new int[_inputSize * _inputSize];
                     resizedBitmap.GetPixels(intValues, 0, resizedBitmap.Width, 0, 0, resizedBitmap.Width, resizedBitmap.Height);
 
                     for (int i = 0; i < intValues.Length; ++i)
