@@ -17,21 +17,26 @@ namespace CustomVision
 	[Activity(Label = "@string/app_name", MainLauncher = true, Icon = "@mipmap/icon", Theme = "@style/MyTheme")]
     public class MainActivity : AppCompatActivity
     {
-		public Android.Support.V7.Widget.Toolbar Toolbar { get; set; }
+        private Android.Support.V7.Widget.Toolbar Toolbar { get; set; }
 
-        Button takePhotoButton;
-		private Button TakePhotoButton => takePhotoButton ?? (takePhotoButton = FindViewById<Button>(Resource.Id.take_photo_button));
+        Button _takePhotoButton;
+		private Button TakePhotoButton => _takePhotoButton ??= FindViewById<Button>(Resource.Id.take_photo_button);
 
-        ImageView photoView;
-		private ImageView PhotoView => photoView ?? (photoView = FindViewById<ImageView>(Resource.Id.photo));
+        Button _selectPhotoButton;
+        private Button SelectPhotoButton => _selectPhotoButton ??= FindViewById<Button>(Resource.Id.select_photo_button);
 
-        TextView resultLabel;
-		private TextView ResultLabel => resultLabel ?? (resultLabel = FindViewById<TextView>(Resource.Id.result_label));
 
-		ProgressBar progressBar;
-		private ProgressBar ProgressBar => progressBar ?? (progressBar = FindViewById<ProgressBar>(Resource.Id.progressbar));
+        ImageView _photoView;
+		private ImageView PhotoView => _photoView ??= FindViewById<ImageView>(Resource.Id.photo);
 
-        readonly ImageClassifier imageClassifier = new ImageClassifier();
+        TextView _resultLabel;
+		private TextView ResultLabel => _resultLabel ??= FindViewById<TextView>(Resource.Id.result_label);
+
+		ProgressBar _progressBar;
+		private ProgressBar ProgressBar => _progressBar ??= FindViewById<ProgressBar>(Resource.Id.progressbar);
+
+        readonly ImageClassifier _imageClassifier = new ImageClassifier();
+
 
         protected override void OnCreate(Bundle savedInstanceState)
 		{
@@ -47,9 +52,29 @@ namespace CustomVision
 			SupportActionBar.SetHomeButtonEnabled(false);
 
 			TakePhotoButton.Click += TakePhotoButton_Click;
+            SelectPhotoButton.Click += SelectPhotoButton_Click;
 		}
 
-		async void TakePhotoButton_Click(object sender, EventArgs e)
+        private async void SelectPhotoButton_Click(object sender, EventArgs e)
+        {
+            SelectPhotoButton.Enabled = false;
+            TakePhotoButton.Enabled = false;
+            ProgressBar.Visibility = ViewStates.Visible;
+
+            try
+            {
+                var image = await CrossMedia.Current.PickPhotoAsync(new PickMediaOptions{PhotoSize = PhotoSize.Medium});
+                ImageProcessing(image);
+            }
+            finally
+            {
+                SelectPhotoButton.Enabled = true;
+                TakePhotoButton.Enabled = true;
+                ProgressBar.Visibility = ViewStates.Invisible;
+            }
+        }
+
+        async void TakePhotoButton_Click(object sender, EventArgs e)
 		{
 			TakePhotoButton.Enabled = false;
             ProgressBar.Visibility = ViewStates.Visible;
@@ -57,21 +82,26 @@ namespace CustomVision
             try
             {
                 var image = await CrossMedia.Current.TakePhotoAsync(new StoreCameraMediaOptions { PhotoSize = PhotoSize.Medium });
-                var bitmap = await BitmapFactory.DecodeStreamAsync(image.GetStreamWithImageRotatedForExternalStorage());
-
-                PhotoView.SetImageBitmap(bitmap);
-                var result = await Task.Run(() => imageClassifier.RecognizeImage(bitmap));
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                CrossTextToSpeech.Current.Speak($"I think it is {result}");
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                ResultLabel.Text = result;
+                ImageProcessing(image);
             }
             finally
             {
                 TakePhotoButton.Enabled = true;
+                SelectPhotoButton.Enabled = true;
                 ProgressBar.Visibility = ViewStates.Invisible;
             }
 		}
+
+        private async void ImageProcessing(MediaFile image)
+        {
+            var bitmap = await BitmapFactory.DecodeStreamAsync(image.GetStreamWithImageRotatedForExternalStorage());
+            PhotoView.SetImageBitmap(bitmap);
+            var result = await Task.Run(() => _imageClassifier.RecognizeImage(bitmap));
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            CrossTextToSpeech.Current.Speak($"I think it is {result}");
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            ResultLabel.Text = result;
+        }
 
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults) => PermissionsImplementation.Current.OnRequestPermissionsResult(requestCode, permissions, grantResults);
     }
